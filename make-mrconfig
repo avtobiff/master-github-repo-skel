@@ -1,0 +1,93 @@
+#!/bin/sh
+
+#
+# Copyright 2013 Per Andersson <avtobiff@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+set -e
+
+
+BASEURL=https://api.github.com
+
+# TODO make options instead
+DEBUG=false
+ORGANIZATION=myorganization
+TEAM=myteam   # limit repos seen to this team (if member is part of several)
+MASTER_REPO=mymaster
+
+
+debug(){
+    msg=$1
+    [ "$DEBUG" = "true" ] && echo "$msg" || true
+}
+
+
+# read github username, default $USER
+printf "GitHub username [$USER]: "
+read username
+if [ -z "$username" ]; then
+    username="$USER"
+fi
+
+# setup OAuth token
+access_token=$(curl -s -u $username -d '{"scopes":["repo"]}' \
+                    $BASEURL/authorizations | \
+               sed -n '/token/ {s/\s*"token":\s*"\([^"]*\)",$/\1/; p}')
+
+if [ -z "$access_token" ]; then
+    echo "E: Could not acquire access token (bad login?)" >&2
+    exit 1
+else
+    debug "I: Got access token $access_token"
+    access="access_token=$access_token"
+fi
+
+# get repo list
+repos=$(curl -s "$BASEURL/orgs/$ORGANIZATION/repos?$access&per_page=100" | \
+        sed -n '/"name":/ {s/^\s*"name":\s*"\([^"]*\)",$/\1/; p}')
+
+if [ -z "$repos" ]; then
+    echo "E: Could not fetch repository list" >&2
+    exit 1
+else
+    debug "I: Got repositories"
+fi
+
+# wipe .mrconfig
+>.mrconfig
+
+printf "Processing repositories"
+[ "$DEBUG" = "true" ] && echo || true # newline in debug mode
+
+# write repo list
+for repo in $repos; do
+    debug "I: Processing repository $repo"
+
+    # skip master repository
+    [ "$repo" = "$MASTER_REPO" ] && continue
+
+    # if repo is in team, write it to config
+    if ! curl -s $BASEURL/repos/$ORGANIZATION/$repo/teams?$acces | \
+            grep --quiet $TEAM; then
+        echo "[$repo]"
+        echo "checkout = git clone git@github.com:$ORGANIZATION/${repo}.git"
+        echo
+    fi >> .mrconfig
+
+    [ "$DEBUG" = "false" ] && printf "." || true # no step progress in debug
+done
+
+echo "done."
