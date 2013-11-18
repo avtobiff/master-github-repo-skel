@@ -95,7 +95,7 @@ repositories has to be done manually.
 
 # Copyright and license
 
-Copyright 2013 Per Andersson <avtobiff@gmail.com>
+Copyright (C) 2013 Per Andersson <avtobiff@gmail.com>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
